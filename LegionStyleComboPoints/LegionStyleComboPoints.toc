@@ -1,4 +1,4 @@
-## Interface: 11506
+## Interface: 11506, 40401
 ## Title: Legion Style ComboPoints
 ## Notes: Adds a legion style combopoint bar to the player frame
 ## Version: @project-version@

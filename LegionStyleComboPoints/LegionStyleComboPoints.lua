@@ -1,5 +1,6 @@
 local TOCNAME, ns = ...
 local MAX_POINT_FRAMES = 6
+local PLAYER_CLASS = UnitClassBase("player")
 local addonFrame = CreateFrame("Frame", TOCNAME.."AddOn", UIParent)
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 --------------------------------------------------------------------------------
@@ -190,48 +191,45 @@ end
 ComboPointBarMixin = {};
 
 function ComboPointBarMixin:OnLoad()
-    if UnitClassBase("player") == "DRUID" then
+    self:SetScript("OnEvent", self.OnEvent)
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    if PLAYER_CLASS == "DRUID" then
+        -- see event handler for other registered druid events
         self:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
-        self:RegisterEvent("PLAYER_ENTERING_WORLD")
-        self:OnEvent("UNIT_DISPLAYPOWER", "player") -- force update on first load
     else -- Rogue
-        self:RegisterEvent("UNIT_POWER_UPDATE")
+        self:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+        self:RegisterUnitEvent("UNIT_MAXPOWER", "player")
         if isClassicEra then
-            self:RegisterEvent("UNIT_TARGET")
+            self:RegisterUnitEvent("UNIT_TARGET", "player")
         end
     end
-    self:SetScript("OnEvent", self.OnEvent)
     initBarTextures(self)
-    -- Move frame back -2 level for the bg (raise combo points back to parent level)
-    local parentLevel = self:GetParent():GetFrameLevel()
-    self:SetFrameLevel(max(0, parentLevel - 2));
-    self:InitilizeComboPoints()
-    self:LayoutComboPoints()
     addonFrame.ComboPointBar = self
 end
 function ComboPointBarMixin:OnEvent(event, ...)
-    if event == "UNIT_POWER_UPDATE" then
-        local unit, powerTypeStr = ...
-        if unit == "player" and powerTypeStr == "COMBO_POINTS" then
-            self:UpdateComboPoints()
-        end
-    elseif event == "UNIT_TARGET" and ... == "player" then
-        -- todo: Edge case
-        -- after dropping target, if the target was not dead, when retargeted, combo points should persist
+    if event == "UNIT_POWER_UPDATE" and select(2, ...) == "COMBO_POINTS" then
         self:UpdateComboPoints()
-    elseif event == "UNIT_DISPLAYPOWER" then -- update when druid enters/leaves cat form
-        local powerType = UnitPowerType("player")
+    elseif event == "UNIT_TARGET" then self:UpdateComboPoints()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        -- execute the UNIT_DISPLAYPOWER handler to setup the correct events for druid
+        if PLAYER_CLASS == "DRUID" then self:OnEvent("UNIT_DISPLAYPOWER") end
+        -- UnitPowerMax returns 0 for combopoints untill the PLAYER ENTERING WORLD event
+        self.maxPlayerComboPoints = UnitPowerMax("player", Enum.PowerType.ComboPoints, true)
+        self:InitilizeComboPoints()
+        self:LayoutComboPoints()
+        self:UpdateComboPoints()
+    elseif event == "UNIT_DISPLAYPOWER" then -- Setup druid events only for cat form
+        -- UnitPowerType returns PowerType.Mana for druids, even in catform, untill PLAYER_ENTERING_WORLD event
+        local powerType = UnitPowerType("player") 
         local useComboPoints = powerType == Enum.PowerType.Energy
-        local registerFunc = useComboPoints and self.RegisterEvent or self.UnregisterEvent
+        local registerFunc = useComboPoints and self.RegisterUnitEvent or self.UnregisterEvent
         self:SetShown(useComboPoints)
-        registerFunc(self, "UNIT_POWER_UPDATE")
-        if isClassicEra then registerFunc(self, "UNIT_TARGET") end
-        if useComboPoints then self:UpdateComboPoints() end
+        registerFunc(self, "UNIT_POWER_UPDATE", "player")
+        registerFunc(self, "UNIT_MAXPOWER", "player")
+        if isClassicEra then registerFunc(self, "UNIT_TARGET", "player") end
     end
 end
 function ComboPointBarMixin:LayoutComboPoints()
-    local parentLevel = self:GetParent():GetFrameLevel()
-    self.maxPlayerComboPoints = UnitPowerMax("player", Enum.PowerType.ComboPoints)
     for i = 1, self.maxPlayerComboPoints do
         updateComboPointLayout(
             self.maxPlayerComboPoints,
@@ -239,7 +237,6 @@ function ComboPointBarMixin:LayoutComboPoints()
             self.ComboPoints[i - 1]
         )
         self.ComboPoints[i]:SetShown(true)
-        self.ComboPoints[i]:SetFrameLevel(parentLevel)
     end
 
 end
@@ -264,7 +261,6 @@ function ComboPointBarMixin:UpdateComboPoints(forcePoints)
         if (not point.on) then
             point.on = true;
             point.AnimIn:Play();
-            
             if (point.PointAnim) then
                 point.PointAnim:Play();
             end
@@ -274,11 +270,9 @@ function ComboPointBarMixin:UpdateComboPoints(forcePoints)
         local point = self.ComboPoints[i]
         if (point.on) then
             point.on = false;
-    
             if (point.PointAnim) then
                 point.PointAnim:Play(true);
             end
-    
             point.AnimIn:Stop();
             point.AnimOut:Play();
         end
@@ -291,13 +285,11 @@ end
 addonFrame:RegisterEvent("ADDON_LOADED")
 addonFrame:SetScript("OnEvent", function(self, event, tocName)
     if tocName == TOCNAME then
-        local playerClass = UnitClassBase("player")
-        if playerClass ~= "ROGUE" and playerClass ~= "DRUID" then return end
+        if PLAYER_CLASS ~= "ROGUE" and PLAYER_CLASS ~= "DRUID" then return end
         addonFrame.DB = _G[C_AddOns.GetAddOnMetadata(TOCNAME, "SavedVariables")]
-        local comboPointBarID = TOCNAME.."BarFrame"
-        local comboPointsFrame = CreateFrame("Frame", comboPointBarID, PlayerFrame)
-        comboPointsFrame:Show()
-        comboPointsFrame = Mixin(comboPointsFrame, ComboPointBarMixin)
-        comboPointsFrame:OnLoad()        
+        local ComboPointsBar = CreateFrame("Frame", TOCNAME.."Bar", PlayerFrame)
+        ComboPointsBar = Mixin(ComboPointsBar, ComboPointBarMixin)
+        ComboPointsBar:OnLoad()        
+        ComboPointsBar:Show()
     end
 end)
