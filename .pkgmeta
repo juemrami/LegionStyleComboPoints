@@ -1,0 +1,4 @@
+package-as: LegionStyleComboPoints
+
+move-folders:
+    LegionStyleComboPoints/LegionStyleComboPoints: LegionStyleComboPoints
