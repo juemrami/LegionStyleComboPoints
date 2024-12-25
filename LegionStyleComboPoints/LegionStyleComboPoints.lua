@@ -1,6 +1,9 @@
 local TOCNAME, ns = ...
 local MAX_POINT_FRAMES = 6
+local SettingsModule = ns.SettingsModule ---@type SettingsModule
 local PLAYER_CLASS = UnitClassBase("player")
+local PLAYER_NAME = UnitNameUnmodified("player")
+local PLAYER_REALM = GetRealmName()
 local addonFrame = CreateFrame("Frame", TOCNAME.."AddOn", UIParent)
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 --------------------------------------------------------------------------------
@@ -188,7 +191,7 @@ local initBarTextures = function(self)
 end
 
 ---@class ComboPointBarMixin: ComboPointBar
-ComboPointBarMixin = {};
+local ComboPointBarMixin = {};
 
 function ComboPointBarMixin:OnLoad()
     self:SetScript("OnEvent", self.OnEvent)
@@ -204,6 +207,7 @@ function ComboPointBarMixin:OnLoad()
         end
     end
     initBarTextures(self)
+    self:InitilizeComboPoints()
     addonFrame.ComboPointBar = self
 end
 function ComboPointBarMixin:OnEvent(event, ...)
@@ -215,7 +219,6 @@ function ComboPointBarMixin:OnEvent(event, ...)
         if PLAYER_CLASS == "DRUID" then self:OnEvent("UNIT_DISPLAYPOWER") end
         -- UnitPowerMax returns 0 for combopoints untill the PLAYER ENTERING WORLD event
         self.maxPlayerComboPoints = UnitPowerMax("player", Enum.PowerType.ComboPoints, true)
-        self:InitilizeComboPoints()
         self:LayoutComboPoints()
         self:UpdateComboPoints()
     elseif event == "UNIT_DISPLAYPOWER" then -- Setup druid events only for cat form
@@ -278,6 +281,14 @@ function ComboPointBarMixin:UpdateComboPoints(forcePoints)
         end
     end
 end
+function ComboPointBarMixin:SetBackgroundShown(show)
+    self.BackGround:SetShown(show)
+    for _, point in ipairs(self.ComboPoints) do
+        point.PointOff:SetAtlas(show and "ComboPoints-PointBg" or "ClassOverlay-ComboPoint-Off", false)
+        point.PointOff:SetAlpha(show and 1 or 0.9)
+        point.PointOff:SetScale(show and 1 or 0.75)
+    end
+end
 --------------------------------------------------------------------------------
 -- Addon load
 --------------------------------------------------------------------------------
@@ -286,10 +297,23 @@ addonFrame:RegisterEvent("ADDON_LOADED")
 addonFrame:SetScript("OnEvent", function(self, event, tocName)
     if tocName == TOCNAME then
         if PLAYER_CLASS ~= "ROGUE" and PLAYER_CLASS ~= "DRUID" then return end
-        addonFrame.DB = _G[C_AddOns.GetAddOnMetadata(TOCNAME, "SavedVariables")]
+        local SavedVarsID = TOCNAME.."DB"
+        local characterKey = ('%s_%s'):format(PLAYER_NAME, PLAYER_REALM)
+        if not _G[SavedVarsID] then _G[SavedVarsID] = {} end
+        if not _G[SavedVarsID][characterKey] then _G[SavedVarsID][characterKey] = {} end
+        local charSavedVars = _G[SavedVarsID][characterKey]
+        
+        SettingsModule:OnLoad()
+        
         local ComboPointsBar = CreateFrame("Frame", TOCNAME.."Bar", PlayerFrame)
         ComboPointsBar = Mixin(ComboPointsBar, ComboPointBarMixin)
         ComboPointsBar:OnLoad()        
         ComboPointsBar:Show()
+        
+        -- hook to settings updates
+        local runHook = true
+        SettingsModule.AddSavedVarUpdateHook(charSavedVars, "showBackground", function(setting, value)
+            ComboPointsBar:SetBackgroundShown(value)
+        end, runHook)
     end
 end)

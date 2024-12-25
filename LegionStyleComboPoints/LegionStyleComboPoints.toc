@@ -5,4 +5,5 @@
 ## Author: Bigsxy
 ## SavedVariables: LegionStyleComboPointsDB
 ## X-Curse-Project-ID: 1164914
+Settings.lua
 LegionStyleComboPoints.lua

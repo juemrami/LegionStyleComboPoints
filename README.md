@@ -6,6 +6,6 @@ A simple addon that displays your current combo points on your character frame, 
 
 ## [WIP] Options
 
+- [x] Ability to hide background texture for combopoint bar
 - [ ] ability to change position of the combopoint bar
-- [ ] ability to hide background texture for combopoint bar
 - [ ] ability to change combo point texture color
