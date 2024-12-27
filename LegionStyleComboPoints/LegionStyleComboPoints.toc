@@ -1,9 +1,10 @@
 ## Interface: 11506, 40401
-## Title: Legion Style ComboPoints
+## Title: Legion Style Combo Points
 ## Notes: Adds a legion style combopoint bar to the player frame
 ## Version: @project-version@
 ## Author: Bigsxy
 ## SavedVariables: LegionStyleComboPointsDB
 ## X-Curse-Project-ID: 1164914
+## X-Short-Name: Legion Combo Points Bar
 Settings.lua
 LegionStyleComboPoints.lua

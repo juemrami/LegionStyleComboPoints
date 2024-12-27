@@ -177,20 +177,88 @@ end
 -- Setup for ComboPointBar (parent to the combo points)
 --------------------------------------------------------------------------------
 
-local initBarTextures = function(self)
-    ---@class ComboPointBar : Frame
-    local bar = self
-    bar:SetSize(126, 18)
-    -- hook onto player frame like blizzard does
-    bar:SetPoint("TOP", PlayerFrame, "BOTTOM", 50, 38)
-    bar:SetFrameLevel(PlayerFrame:GetFrameLevel() + 2)
-    local background = bar:CreateTexture(nil, "OVERLAY")
-    background:SetAtlas("ComboPoints-AllPointsBG", true)
-    background:SetPoint("TOPLEFT")
-    bar.BackGround = background
+-- todo, moved to saved var to persist between sessions
+local sessionDraggableState = false 
+local updateDragMoveHandlers = function(self, makeDraggable)
+    sessionDraggableState = makeDraggable
+    if makeDraggable then
+        self:SetMovable(true)
+        self:RegisterForDrag("LeftButton")
+        self:SetScript("OnDragStart", function(self)
+            self:StartMoving()
+        end)
+        self:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+        end)
+    else
+        self:SetMovable(false)
+        self:RegisterForDrag()
+        self:SetScript("OnDragStart", nil)
+        self:SetScript("OnDragStop", nil)
+    end
+end
+local updateTooltipHandlers = function(self, enableTooltip, showClickInstructions)
+    if enableTooltip then
+        self:SetScript("OnEnter", function(self)
+            GameTooltip_SetDefaultAnchor(GameTooltip, self)
+            GameTooltip_SetTitle(GameTooltip, C_AddOns.GetAddOnMetadata(TOCNAME, "X-Short-Name"), NORMAL_FONT_COLOR)
+            if showClickInstructions then 
+                GameTooltip_AddInstructionLine(GameTooltip, UNIT_POPUP_RIGHT_CLICK or "<Right click for Frame Settings")
+            end
+            GameTooltip:Show()
+        end)
+        self:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+    else
+        self:SetScript("OnEnter", nil)
+        self:SetScript("OnLeave", nil)
+    end
+end
+local updateContextMenuHandlers = function (self, enableMenu)
+    if enableMenu then
+        local menuGenerator = function(owner, rootDescription)
+            ---@cast rootDescription RootMenuDescriptionProxy
+            rootDescription:CreateTitle("Combo Point Bar")
+            do
+                local setting = SettingsModule.GetSavedVarSettingObject(
+                    _G[TOCNAME.."DB"][PLAYER_NAME.."_"..PLAYER_REALM], "showBackground"
+                );
+                local isSelected = function() return setting:GetValue() end
+                local onSelect = function() setting:SetValue(not setting:GetValue()) end
+                rootDescription:CreateCheckbox("Show Background", isSelected, onSelect)
+            end
+            do 
+                ---@return boolean true if the frame is locked (aka not draggable)
+                local isSelected = function() return not sessionDraggableState end
+                local onSelect = function()
+                    sessionDraggableState = not sessionDraggableState
+                    updateDragMoveHandlers(self, sessionDraggableState)
+                end
+                rootDescription:CreateCheckbox(LOCK_FRAME, isSelected, onSelect)
+            end
+        end
+    self:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+          MenuUtil.CreateContextMenu(self, menuGenerator)
+        end
+    end)
+    else
+        self:SetScript("OnEnter", nil)
+        self:SetScript("OnLeave", nil)
+        self:SetScript("OnMouseDown", nil)
+    end
 end
 
----@class ComboPointBarMixin: ComboPointBar
+---@param self ComboPointBarMixin
+local connectToPlayerFrame = function(self)
+    self:SetParent(PlayerFrame)
+    self:SetSize(126, 18)
+    self:SetPoint("TOP", PlayerFrame, "BOTTOM", 50, 38)
+    self:SetFrameLevel(PlayerFrame:GetFrameLevel() + 2)
+end
+
+---@class ComboPointBarMixin: Frame
 local ComboPointBarMixin = {};
 
 function ComboPointBarMixin:OnLoad()
@@ -206,7 +274,10 @@ function ComboPointBarMixin:OnLoad()
             self:RegisterUnitEvent("UNIT_TARGET", "player")
         end
     end
-    initBarTextures(self)
+    self:ConnectToPlayerFrame()
+    self.BackGround = self:CreateTexture(nil, "OVERLAY")
+    self.BackGround:SetAtlas("ComboPoints-AllPointsBG", true)
+    self.BackGround:SetPoint("TOPLEFT")
     self:InitilizeComboPoints()
     addonFrame.ComboPointBar = self
 end
@@ -289,6 +360,22 @@ function ComboPointBarMixin:SetBackgroundShown(show)
         point.PointOff:SetScale(show and 1 or 0.75)
     end
 end
+function ComboPointBarMixin:ConnectToPlayerFrame() -- overridable by frame addons
+    self:ClearAllPoints()
+    connectToPlayerFrame(self)
+end
+function ComboPointBarMixin:Detach(xOffs, yOffs)
+    -- for now dont actually unparent it, just remove the anchors to PlayerFrame
+    if not (xOffs and yOffs) then -- use its position when at playeframe, offset by a couple pixel to make obvious to user
+        xOffs = self:GetLeft() + 15
+        yOffs = self:GetTop() - 15
+    else
+        xOffs = xOffs or 0
+        yOffs = yOffs or 0
+    end
+    self:ClearAllPoints()
+    self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", xOffs, yOffs)
+end
 --------------------------------------------------------------------------------
 -- Addon load
 --------------------------------------------------------------------------------
@@ -311,9 +398,36 @@ addonFrame:SetScript("OnEvent", function(self, event, tocName)
         ComboPointsBar:Show()
         
         -- hook to settings updates
-        local runHook = true
+        local execOnRegister = true -- fire once initially to sync frames to settings
         SettingsModule.AddSavedVarUpdateHook(charSavedVars, "showBackground", function(setting, value)
             ComboPointsBar:SetBackgroundShown(value)
-        end, runHook)
+        end, execOnRegister)
+        SettingsModule.AddSavedVarUpdateHook(charSavedVars, "enableDetachedMode", function(setting, isDetached)
+            if isDetached then
+                ComboPointsBar:Detach(charSavedVars.detachedXOffset, charSavedVars.detachedYOffset)
+                ComboPointsBar:EnableMouse(charSavedVars.enableDetachedFrameRightClickMenu or charSavedVars.enableDetachedFrameTooltip)
+                updateContextMenuHandlers(ComboPointsBar, charSavedVars.enableDetachedFrameRightClickMenu)
+                updateTooltipHandlers(ComboPointsBar, charSavedVars.enableDetachedFrameTooltip, charSavedVars.enableDetachedFrameRightClickMenu)
+            else
+                ComboPointsBar:EnableMouse(false)
+                updateContextMenuHandlers(ComboPointsBar, false)
+                updateTooltipHandlers(ComboPointsBar, false)
+                ComboPointsBar:ConnectToPlayerFrame()
+            end
+        end, execOnRegister)
+        hooksecurefunc(ComboPointsBar, "StopMovingOrSizing", function()
+            if not charSavedVars.enableDetachedMode then return end
+            charSavedVars.detachedXOffset = ComboPointsBar:GetLeft()
+            charSavedVars.detachedYOffset = ComboPointsBar:GetTop()
+        end)
+        SettingsModule.AddSavedVarUpdateHook(charSavedVars, "enableDetachedFrameTooltip", function(setting, value)
+            updateTooltipHandlers(ComboPointsBar, value, charSavedVars.enableDetachedFrameRightClickMenu)
+        end, not execOnRegister)
+        SettingsModule.AddSavedVarUpdateHook(charSavedVars, "enableDetachedFrameRightClickMenu", function(setting, value)
+            updateContextMenuHandlers(ComboPointsBar, value)
+            if charSavedVars.enableDetachedFrameTooltip then -- toggle right click instruction text on tooltip
+                updateTooltipHandlers(ComboPointsBar, true, value)
+            end
+        end, not execOnRegister)
     end
 end)
