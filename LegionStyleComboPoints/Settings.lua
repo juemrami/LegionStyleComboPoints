@@ -15,61 +15,39 @@ local function OnSettingChanged(setting, value)
 end
 ---@class SettingsModule
 local SettingsModule = {};
-function SettingsModule:OnLoad()
+---@param config {defaults: table, widgets: savedVarWidgetDescription[]}
+function SettingsModule:Initialize(config)
     -- only use per character for now
-    local savedVars = _G[TOCNAME .. "DB"][PLAYER_NAME.."_"..PLAYER_REALM]
-    assert(savedVars, "SavedVariables not found for " .. TOCNAME)
-    settingsRegistry[savedVars] = settingsRegistry[savedVars] or {};
-    do 
-        local name = "Show Background Texture"
-        local variable = TOCNAME.."showBackground" -- should be Unique to ALL addons
-        local savedVarKey = "showBackground"
-        local default = true
-        local tooltip = "Disable to remove the background from the combo points bar."
-        ---@type AddonSettingMixin
-        local setting = Settings.RegisterAddOnSetting(category, variable, savedVarKey, savedVars, type(default), name, default)
-        setting:SetValueChangedCallback(OnSettingChanged)
-        settingsRegistry[savedVars][savedVarKey] = setting
-        Settings.CreateCheckbox(category, setting, tooltip)
-    end
-    do
-        local name = "Enabled Detached Mode"
-        local variable = TOCNAME.."enableDetachedMode"
-        local default = false
-        local savedVarKey = "enableDetachedMode"
-        local tooltip = "Detach the combo points bar from the player frame. Right click and unlock the bar to move it."
-        local setting = Settings.RegisterAddOnSetting(category, variable, savedVarKey, savedVars, type(default), name, default)
-        setting:SetValueChangedCallback(OnSettingChanged)
-        settingsRegistry[savedVars][savedVarKey] = setting
-        local detachSettingInitializer = Settings.CreateCheckbox(category, setting, tooltip)
-        local isSubOptionEnabled = function()
-            return setting:GetValue()
-        end
-        do -- Enable Tooltip (default: true)
-            local name = "Enable Frame Tooltip"
-            local variable = TOCNAME.."enableDetachedFrameTooltip"
-            local default = true
-            local savedVarKey = "enableDetachedFrameTooltip"
-            local tooltip = "Show a tooltip when hovering over the detached combo points bar."
-            local setting = Settings.RegisterAddOnSetting(category, variable, savedVarKey, savedVars, type(default), name, default)
+    local savedVarTable = _G[TOCNAME .. "DB"][PLAYER_NAME.."_"..PLAYER_REALM]
+    assert(savedVarTable, "SavedVariables not found for " .. TOCNAME)
+    settingsRegistry[savedVarTable] = settingsRegistry[savedVarTable] or {};
+    local defaults = config.defaults
+    ---@param rootWidgets savedVarWidgetDescription[]
+    local function buildWidgets(rootWidgets, parentInitializer, enabledFunc)
+        for _, description in ipairs(rootWidgets) do
+            local savedVarKey = description.variable
+            local settingID = TOCNAME..savedVarKey -- should be Unique to ALL addons
+            local default = defaults[savedVarKey]
+            local setting = Settings.RegisterAddOnSetting(
+                category, settingID,
+                savedVarKey, savedVarTable,
+                type(default), description.displayStr, default
+            )
             setting:SetValueChangedCallback(OnSettingChanged)
-            settingsRegistry[savedVars][savedVarKey] = setting
-            local initializer = Settings.CreateCheckbox(category, setting, tooltip)
-            initializer:SetParentInitializer(detachSettingInitializer, isSubOptionEnabled)
-        end
-        do -- Enable rightclick menu (default: true)
-            local name = "Enable Right-click Menu"
-            local variable = TOCNAME.."enableDetachedFrameRightClickMenu"
-            local default = true
-            local savedVarKey = "enableDetachedFrameRightClickMenu"
-            local tooltip = "Enables a settings quick menu when right clicking the detached combo points bar."
-            local setting = Settings.RegisterAddOnSetting(category, variable, savedVarKey, savedVars, type(default), name, default)
-            setting:SetValueChangedCallback(OnSettingChanged)
-            settingsRegistry[savedVars][savedVarKey] = setting
-            local initializer = Settings.CreateCheckbox(category, setting, tooltip)
-            initializer:SetParentInitializer(detachSettingInitializer, isSubOptionEnabled)
+            settingsRegistry[savedVarTable][savedVarKey] = setting
+            local initializer = Settings.CreateCheckbox(category, setting, description.tooltip)
+            if parentInitializer and enabledFunc then
+                -- Disable sub-options when parent is disabled
+                initializer:SetParentInitializer(parentInitializer, enabledFunc)
+            end
+            if description.widgets then
+                buildWidgets(description.widgets, initializer, function()
+                    return setting:GetValue();
+                end)
+            end
         end
     end
+    buildWidgets(config.widgets)
     Settings.RegisterAddOnCategory(category)
 end
 

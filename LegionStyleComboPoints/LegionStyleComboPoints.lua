@@ -6,6 +6,10 @@ local PLAYER_NAME = UnitNameUnmodified("player")
 local PLAYER_REALM = GetRealmName()
 local addonFrame = CreateFrame("Frame", TOCNAME.."AddOn", UIParent)
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local isMists = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
+-- Mists adds a new mana bar below the player frame for druids in cat form.
+local playerHasAlternateManaBar = isMists and PLAYER_CLASS == "DRUID"
+
 --------------------------------------------------------------------------------
 -- Setup for ComboPoints (the acutal points themslves)
 --------------------------------------------------------------------------------
@@ -252,9 +256,13 @@ end
 
 ---@param self ComboPointBarMixin
 local connectToPlayerFrame = function(self)
-    self:SetParent(PlayerFrame)
+    local xOffs, yOffs = 50, 38
+    if playerHasAlternateManaBar then -- slightly adjust the position downward
+        xOffs, yOffs = 52, 24
+    end
     self:SetSize(126, 18)
-    self:SetPoint("TOP", PlayerFrame, "BOTTOM", 50, 38)
+    self:SetParent(PlayerFrame)
+    self:SetPoint("TOP", PlayerFrame, "BOTTOM", xOffs, yOffs)
     self:SetFrameLevel(PlayerFrame:GetFrameLevel() + 2)
 end
 
@@ -389,14 +397,48 @@ addonFrame:SetScript("OnEvent", function(self, event, tocName)
         if not _G[SavedVarsID] then _G[SavedVarsID] = {} end
         if not _G[SavedVarsID][characterKey] then _G[SavedVarsID][characterKey] = {} end
         local charSavedVars = _G[SavedVarsID][characterKey]
-        
-        SettingsModule:OnLoad()
-        
+        ---@class savedVarWidgetDescription
+        ---@field variable string the saved variable name
+        ---@field displayStr string the display string for the setting
+        ---@field tooltip string? the tooltip for the setting
+        ---@field widgets savedVarWidgetDescription[]? sub widgets for this setting
+        SettingsModule:Initialize({
+            defaults = {
+                showBackground = not playerHasAlternateManaBar,
+                enableDetachedMode = false,
+                enableDetachedFrameTooltip = true,
+                enableDetachedFrameRightClickMenu = true,
+            },
+            widgets = {
+                {
+                    variable = "showBackground",
+                    displayStr = "Show Background Texture",
+                    tooltip = "Disable to remove the background from the combo points bar.",
+                },
+                {
+                    variable = "enableDetachedMode",
+                    displayStr = "Enabled Detached Mode",
+                    tooltip = "Detach the combo points bar from the player frame. Right click and unlock the bar to move it.",
+                    widgets = {
+                        {
+                            variable = "enableDetachedFrameTooltip",
+                            displayStr = "Enable Frame Tooltip",
+                            tooltip = "Show a tooltip when hovering over the detached combo points bar.",
+                        },
+                        {
+                            variable = "enableDetachedFrameRightClickMenu",
+                            displayStr = "Enable Right-click Menu",
+                            tooltip = "Enables a settings quick menu when right clicking the detached combo points bar.",
+                        },
+                    },
+                },
+            }
+        })
         local ComboPointsBar = CreateFrame("Frame", TOCNAME.."Bar", PlayerFrame)
         ComboPointsBar = Mixin(ComboPointsBar, ComboPointBarMixin)
-        ComboPointsBar:OnLoad()        
+        ComboPointsBar:OnLoad()
         ComboPointsBar:Show()
-        
+
         -- hook to settings updates
         local execOnRegister = true -- fire once initially to sync frames to settings
         SettingsModule.AddSavedVarUpdateHook(charSavedVars, "showBackground", function(setting, value)

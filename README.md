@@ -15,7 +15,7 @@ Default Frame
 
 Hidden Background Frame
 
-![hide background](https://i.imgur.com/BjcboGJ.png)
+![hide background](https://i.imgur.com/8HQGaCp.png)
 
 Settings
 
