@@ -6,6 +6,7 @@ local PLAYER_NAME = UnitNameUnmodified("player")
 local PLAYER_REALM = GetRealmName()
 local addonFrame = CreateFrame("Frame", TOCNAME.."AddOn", UIParent)
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local isBurningCrusade = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local isMists = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 -- Mists adds a new mana bar below the player frame for druids in cat form.
 local playerHasAlternateManaBar = isMists and PLAYER_CLASS == "DRUID"
@@ -256,7 +257,14 @@ end
 
 ---@param self ComboPointBarMixin
 local connectToPlayerFrame = function(self)
-    local xOffs, yOffs = 50, 38
+    local xOffs, yOffs do
+        if isBurningCrusade then
+            -- 20505 tbc client adds edit mode which changes the playerFrame size
+            xOffs, yOffs = 32.5, 35.5
+        else
+            xOffs, yOffs = 50, 39
+        end
+    end
     if playerHasAlternateManaBar then -- slightly adjust the position downward
         xOffs, yOffs = 52, 24
     end
