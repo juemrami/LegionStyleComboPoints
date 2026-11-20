@@ -2,7 +2,7 @@
 
 A simple addon that displays your current combo points on your character frame, inspired by the combo point display in Legion.
 
-## Settings [WIP]
+## Settings
 
 - **Show Background Textures** - Show/Hide the background texture of the combo point bar
 - **Enable Detached Mode** - Sets the combo point bar to a "detached mode".
@@ -24,6 +24,3 @@ Settings
 Detached Mode Menu
 
 ![detached mode menu](https://i.imgur.com/Xkfr2g4.png)
-
-## TODO
-- [ ] Ability to change combo point texture color

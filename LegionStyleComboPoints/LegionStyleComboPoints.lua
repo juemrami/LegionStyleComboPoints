@@ -7,6 +7,7 @@ local PLAYER_REALM = GetRealmName()
 local addonFrame = CreateFrame("Frame", TOCNAME.."AddOn", UIParent)
 local isClassicEra = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 local isBurningCrusade = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
+local isWowForever = WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
 local isMists = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 local clientHasEditMode = isBurningCrusade or isClassicEra or isMists
 -- Mists adds a new mana bar below the player frame for druids in cat form.
@@ -259,9 +260,11 @@ end
 ---@param self ComboPointBarMixin
 local connectToPlayerFrame = function(self)
     local xOffs, yOffs do
-        if (clientHasEditMode) then
+        if (isBurningCrusade or isClassicEra or isMists) then
             xOffs, yOffs = 32.5, 35.5
-        else
+        elseif isWowForever then
+					xOffs, yOffs = 32.5, 29
+				else
             xOffs, yOffs = 50, 39
         end
     end
@@ -412,7 +415,7 @@ addonFrame:SetScript("OnEvent", function(self, event, tocName)
         ---@field widgets savedVarWidgetDescription[]? sub widgets for this setting
         SettingsModule:Initialize({
             defaults = {
-                showBackground = not playerHasAlternateManaBar,
+                showBackground = (not playerHasAlternateManaBar) and (not isWowForever),
                 enableDetachedMode = false,
                 enableDetachedFrameTooltip = true,
                 enableDetachedFrameRightClickMenu = true,
